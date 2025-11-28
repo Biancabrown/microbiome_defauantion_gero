@@ -19,7 +19,7 @@ library(ggplot2)
 
 ## ps0 is assumed to be a phyloseq object already in the environment
 
-gero_unrare %>% write_rds("gero_unrare.update_names.rds")
+gero_unrare <- read_rds("gero_unrare.rds")
 ## ---- Subset Gero and split by location ----
 gero_unrare <- subset_samples(ps0, Species_Submitted == "GERO")
 
