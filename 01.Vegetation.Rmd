@@ -24,7 +24,7 @@ library(ggpubr)    # for ggbarplot
 
 # Data from Alston et al. 2022
 dat <- read_delim(
-  "~/Downloads/ecy3649-sup-0001-datas1/TREE_CENSUS_DETAILED_2009-2019.csv",
+  "~/ecy3649-sup-0001-datas1/TREE_CENSUS_DETAILED_2009-2019.csv",
   trim_ws = TRUE
 )
 
