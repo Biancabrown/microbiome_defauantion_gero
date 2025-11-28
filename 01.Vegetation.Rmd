@@ -1,0 +1,238 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+############################################################
+## 0. Packages
+############################################################
+
+library(tidyverse)
+library(readr)
+library(vegan)
+library(ape)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(rstatix)  
+library(ggpubr)    # for ggbarplot
+
+############################################################
+## 1. Data import and basic preprocessing
+############################################################
+
+# Data from Alston et al. 2022
+dat <- read_delim(
+  "~/Downloads/ecy3649-sup-0001-datas1/TREE_CENSUS_DETAILED_2009-2019.csv",
+  trim_ws = TRUE
+)
+
+# Summarize stems per species × site × year × treatment
+rich_site_trt <- dat %>%
+  group_by(species, site, year, treatment) %>%
+  summarise(no_stems = sum(total), .groups = "drop")
+
+############################################################
+## 2. Color palette
+############################################################
+
+mycols <- c(
+  "Acacia_brevispica"    = "#8DAA91",
+  "Acacia_drepanolobium" = "#A26769",
+  "Acacia_etbaica"       = "#588157",
+  "Acacia_gerrardii"     = "#3A5A40",
+  "Acacia_mellifera"     = "#D4A373",
+  "Acacia_nilotic"       = "#6C584C",   # check spelling vs data
+  "Acacia_seyal"         = "#CCD5AE",
+  "Acacia_tortilis"      = "#A3B18A",
+  "Acacia_xanthophloea"  = "#E9C46A",
+  "Other"                = "darkgray"
+)
+
+############################################################
+## 3. Early vs Late subsets + combined data frame
+############################################################
+
+# Helper function to collapse non-Acacia into "Other"
+collapse_species <- function(df) {
+  df %>%
+    filter(treatment %in% c("TOTAL", "OPEN"),
+           species != "NONE") %>%
+    mutate(
+      species = ifelse(grepl("Acacia", species), species, "Other")
+    )
+}
+
+early_df <- rich_site_trt %>%
+  filter(year %in% c(2009, 2010, 2011, 2012)) %>%
+  collapse_species() %>%
+  mutate(Time = "Early")
+
+late_df <- rich_site_trt %>%
+  filter(year %in% c(2016, 2017, 2018)) %>%
+  collapse_species() %>%
+  mutate(Time = "Late")
+
+together <- bind_rows(early_df, late_df)
+
+############################################################
+## 4. Univariate models: Early and Late separately
+############################################################
+
+# Early: ANOVA + post-hoc
+model_early <- aov(no_stems ~ treatment * site, data = early_df)
+summary(model_early)
+
+emmeans_early <- emmeans(model_early, pairwise ~ treatment | site)
+emmeans_early
+
+# Late: ANOVA + post-hoc
+model_late <- aov(no_stems ~ treatment * site, data = late_df)
+summary(model_late)
+
+emmeans_late <- emmeans(model_late, pairwise ~ treatment | site)
+emmeans_late
+
+# Optional: LMM with year as random effect (Late as example)
+lmm_late <- lmer(no_stems ~ treatment * site + (1 | year), data = late_df)
+summary(lmm_late)
+anova(lmm_late)
+
+############################################################
+## 5. Three-way ANOVA on combined Early + Late
+############################################################
+
+model_time <- aov(no_stems ~ treatment * site * Time, data = together)
+summary(model_time)
+
+############################################################
+## 6. Barplot of stems by treatment × site × Time
+############################################################
+
+ggbarplot(
+  together,
+  x = "treatment",
+  y = "no_stems",
+  facet.by = c("site", "Time"),
+  scales = "free",
+  fill = "species",
+  color = "species",
+  palette = mycols
+)
+
+############################################################
+## 7. Community matrix for multivariate analyses
+############################################################
+
+# Define sample ID: site × treatment × Time × year
+together <- together %>%
+  mutate(sample = paste(site, treatment, Time, year, sep = "_"))
+
+# Community matrix: rows = samples, cols = species
+comm_df <- together %>%
+  select(sample, species, no_stems) %>%
+  group_by(sample, species) %>%
+  summarise(abund = sum(no_stems), .groups = "drop") %>%
+  pivot_wider(
+    names_from  = species,
+    values_from = abund,
+    values_fill = list(abund = 0),
+    values_fn   = list(abund = sum)
+  )
+
+# Sample metadata
+meta <- together %>%
+  distinct(sample, site, treatment, Time, year) %>%
+  arrange(sample)
+
+# Community matrix as numeric, drop all-zero species
+comm_mat <- comm_df %>%
+  arrange(sample) %>%
+  column_to_rownames("sample") %>%
+  as.matrix()
+
+nz_cols <- colSums(comm_mat) > 0
+comm_mat <- comm_mat[, nz_cols, drop = FALSE]
+
+############################################################
+## 8. PERMANOVA (Bray–Curtis)
+############################################################
+
+# Transform abundances (sqrt helps with skewed count data)
+comm_bc <- sqrt(comm_mat)
+
+# Bray–Curtis distance
+bc <- vegdist(comm_bc, method = "bray")
+
+# Ensure factor ordering
+meta <- meta %>%
+  mutate(
+    site = factor(site, levels = c("N", "C", "S")),
+    Time = factor(Time, levels = c("Early", "Late"))
+  )
+
+# Main PERMANOVA model
+set.seed(1)
+adon_main <- adonis2(
+  bc ~ site * Time + treatment,
+  data = meta,
+  permutations = 9999,
+  by = "term"
+)
+adon_main
+
+# Alternative fully saturated model if desired:
+adon_full <- adonis2(
+  bc ~ site + Time + treatment +
+        site:treatment + treatment:Time + site:Time,
+  data = meta,
+  permutations = 9999,
+  by = "term"
+)
+adon_full
+
+############################################################
+## 9. Dispersion (beta-dispersion) checks
+############################################################
+
+bd_treat <- betadisper(bc, meta$treatment)
+bd_site  <- betadisper(bc, meta$site)
+bd_time  <- betadisper(bc, meta$Time)
+
+anova(bd_treat); permutest(bd_treat)
+anova(bd_site);  permutest(bd_site)
+anova(bd_time);  permutest(bd_time)
+
+############################################################
+## 10. NMDS ordination + ggplot
+############################################################
+
+set.seed(2)
+nmds <- metaMDS(bc, k = 2, trymax = 100)
+
+scores_df <- scores(nmds) %>%
+  as.data.frame() %>%
+  rownames_to_column("sample") %>%
+  left_join(meta, by = "sample") %>%
+  mutate(
+    time_treatment = paste(treatment, Time, sep = "_")
+  )
+
+ggplot(scores_df, aes(x = NMDS1, y = NMDS2,
+                      color = site, shape = time_treatment)) +
+  geom_point(size = 2.6, alpha = 0.95) +
+  stat_ellipse(aes(group = site), linewidth = 0.6,
+               linetype = 2, show.legend = FALSE) +
+  labs(
+    x = "NMDS1", y = "NMDS2",
+    color = "Site", shape = "Treatment × Time",
+    subtitle = paste0("Bray–Curtis NMDS (stress = ",
+                      round(nmds$stress, 3), ")")
+  ) +
+  scale_shape_manual(values = c(1, 2, 16, 17, 0, 15)) +
+  scale_color_manual(values = c("#F37021", "#D0DD27", "#128D44")) +
+  theme_bw(base_size = 14)
+
+```
+

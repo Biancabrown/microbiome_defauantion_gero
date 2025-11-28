@@ -1,0 +1,176 @@
+---
+title: "ANCOM-BC"
+output: html_notebook
+---
+
+```{r Figure 4}
+## ============================================================
+## ANCOM-BC on Gero by Location (N, C, S) and Lollipop Plot
+## ============================================================
+
+## ---- Packages ----
+library(phyloseq)
+library(microbiome)
+library(mia)
+library(ANCOMBC)
+library(ggpubr)
+library(dplyr)
+library(ggplot2)
+
+## ps0 is assumed to be a phyloseq object already in the environment
+
+gero_unrare %>% write_rds("gero_unrare.update_names.rds")
+## ---- Subset Gero and split by location ----
+gero_unrare <- subset_samples(ps0, Species_Submitted == "GERO")
+
+gero.north   <- subset_samples(gero_unrare, Location == "N")
+gero.central <- subset_samples(gero_unrare, Location == "C")
+gero.south   <- subset_samples(gero_unrare, Location == "S")
+
+## Drop taxa with zero counts per subset
+gero.north   <- prune_taxa(taxa_sums(gero.north)   > 0, gero.north)
+gero.central <- prune_taxa(taxa_sums(gero.central) > 0, gero.central)
+gero.south   <- prune_taxa(taxa_sums(gero.south)   > 0, gero.south)
+
+## ---- Helper: run ANCOM-BC for Treatment (LMH vs CON) ----
+run_ancom_treatment <- function(pseq_obj) {
+  tse <- mia::makeTreeSummarizedExperimentFromPhyloseq(pseq_obj)
+  pseq <- makePhyloseqFromTreeSummarizedExperiment(tse)
+  
+  ## Ensure Treatment is ordered LMH (reference) then CON
+  sample_data(pseq)$Treatment <- factor(
+    sample_data(pseq)$Treatment,
+    levels = c("LMH", "CON")
+  )
+  
+  out <- ancombc(
+    phyloseq    = pseq,
+    formula     = "Treatment",
+    p_adj_method = "holm"
+  )
+  
+  out
+}
+
+out.pseq.gero.central <- run_ancom_treatment(gero.central)
+out.pseq.gero.north   <- run_ancom_treatment(gero.north)
+out.pseq.gero.south   <- run_ancom_treatment(gero.south)
+
+## ---- Extract significant taxa (CON vs LMH) and log-fold changes ----
+## Central
+out.pseq.gero.central.true <- out.pseq.gero.central$res$diff_abn %>%
+  filter(TreatmentCON == "TRUE")
+
+out.pseq.gero.central.lfc <- out.pseq.gero.central$res$lfc
+
+out.pseq.gero.central.true$OTU <- out.pseq.gero.central.true$taxon
+out.pseq.gero.central.true <- merge(
+  out.pseq.gero.central.true,
+  out.pseq.gero.central.lfc,
+  by = "taxon"
+)
+
+## North
+out.pseq.gero.north.true <- out.pseq.gero.north$res$diff_abn %>%
+  filter(TreatmentCON == "TRUE")
+
+out.pseq.gero.north.lfc <- out.pseq.gero.north$res$lfc
+
+out.pseq.gero.north.true$OTU <- out.pseq.gero.north.true$taxon
+out.pseq.gero.north.true <- merge(
+  out.pseq.gero.north.true,
+  out.pseq.gero.north.lfc,
+  by = "taxon"
+)
+
+## South
+out.pseq.gero.south.true <- out.pseq.gero.south$res$diff_abn %>%
+  filter(TreatmentCON == "TRUE")
+
+out.pseq.gero.south.lfc <- out.pseq.gero.south$res$lfc
+
+out.pseq.gero.south.true$OTU <- out.pseq.gero.south.true$taxon
+out.pseq.gero.south.true <- merge(
+  out.pseq.gero.south.true,
+  out.pseq.gero.south.lfc,
+  by = "taxon"
+)
+
+## ---- Melt abundance data for plotting ----
+gero.melt.unrare <- psmelt(gero_unrare)
+
+gero.melt.n <- gero.melt.unrare %>%
+  filter(Location == "N")
+
+gero.melt.c <- gero.melt.unrare %>%
+  filter(Location == "C")
+
+gero.melt.s <- gero.melt.unrare %>%
+  filter(Location == "S")
+
+
+
+## ---- Taxonomy tables for unique OTUs (by location) ----
+gero.melt.n. <- gero.melt.n %>%
+  select(OTU, Phylum, Class, Order, Family, Genus, Species, Location) %>%
+  distinct()
+
+gero.melt.c. <- gero.melt.c %>%
+  select(OTU, Phylum, Class, Order, Family, Genus, Species, Location) %>%
+  distinct()
+
+gero.melt.s. <- gero.melt.s %>%
+  select(OTU, Phylum, Class, Order, Family, Genus, Species, Location) %>%
+  distinct()
+
+## ============================================================
+## Lollipop plot for significant OTUs across locations
+## (uses TreatmentCON.y from merged ANCOM-BC lfc table)
+## ============================================================
+
+## Merge taxonomy with ANCOM-BC results and keep unique OTUs
+merged_data <- dplyr::bind_rows(
+  merge(gero.melt.n., out.pseq.gero.north.true,   by = "OTU"),
+  merge(gero.melt.c., out.pseq.gero.central.true, by = "OTU"),
+  merge(gero.melt.s., out.pseq.gero.south.true,   by = "OTU")
+) %>%
+  distinct(OTU, .keep_all = TRUE)
+
+## Add simple OTU IDs and label with taxonomy
+merged_data <- merged_data %>%
+  mutate(
+    OTU_ID   = paste0("OTU_", dplyr::row_number()),
+    Location = factor(Location, levels = c("N", "C", "S"))
+  ) %>%
+  arrange(Location, TreatmentCON.y) %>% 
+  mutate(
+    label = paste(OTU_ID, Phylum, Order, Family, sep = "_")
+  )
+
+## Lollipop plot
+ggplot(merged_data, aes(x = reorder(label, TreatmentCON.y),
+                        y = TreatmentCON.y,
+                        color = Location)) +
+  geom_segment(aes(xend = label, y = 0, yend = TreatmentCON.y), size = 1) +
+  geom_point(size = 3) +
+  labs(
+    x = "Unique OTU with taxonomy",
+    y = "Log-fold change (CON vs LMH)",
+    title = "Differentially abundant OTUs by location (ANCOM-BC)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x  = element_text(angle = 45, hjust = 1, vjust = 1, size = 8),
+    axis.text.y  = element_text(size = 8),
+    axis.title.x = element_text(size = 10, face = "bold"),
+    axis.title.y = element_text(size = 10, face = "bold"),
+    legend.title = element_text(size = 9, face = "bold"),
+    legend.text  = element_text(size = 8)
+  ) +
+  scale_color_manual(values = c("#F37021", "#D0DD27", "#128D44"))
+# ggsave("all.lollipop.unique.otus.pdf", width = 10, height = 6)
+
+
+
+```
+

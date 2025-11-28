@@ -1,0 +1,271 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+#rarified gero dataset
+read_rds("gero_rare.rds")
+
+#prep data for betadiveristy analysis
+gero_pa<-gero
+otu_table(gero_pa) <- otu_table(apply(otu_table(gero_pa), 1:2, function(x) as.numeric(x > 0)), taxa_are_rows(gero_pa))
+
+gero_rel <- transform_sample_counts(gero, function(x) x / sum(x))
+gero.wunifrac.all.<- phyloseq::distance(gero_rel,method = "wunifrac")
+gero.unifrac.all.<- phyloseq::distance(gero_pa,method = "unifrac")
+gero.bray.all.<- phyloseq::distance(gero_rel,method = "bray")
+gero.jaccard.all.<- phyloseq::distance(gero_pa,method = "jaccard")
+
+```
+
+
+
+```{r Figure 3}
+# Ensure factor levels are ordered 
+sample_data(gero)$Location  <- factor(sample_data(gero)$Location,
+                                      levels = c("N", "C", "S"))
+sample_data(gero)$Treatment <- factor(sample_data(gero)$Treatment,
+                                      levels = c("LMH", "CON"))
+
+gero.unifrac.all.ord <- ordinate(gero_pa, "PCoA", "unifrac")
+p<-plot_ordination(
+  physeq = gero,
+  ordination = gero.unifrac.all.ord,
+color="Location",shape="Treatment"
+)
+
+p$layers[[1]] <- NULL
+# Now add YOUR custom points + ellipses + themes
+p1_uni<-p +
+  geom_point(size = 2, stroke = 1) +  # bigger points, no double circles
+  stat_ellipse(aes(group = Treatment, linetype = Treatment)) +
+  theme_biome_utils() +
+  scale_color_manual(values = c(
+    N = "#F37021",
+    C = "#D0DD27",
+    S = "#128D44"
+  )) +
+  scale_shape_manual(values = c(
+    LMH = 16,  # filled circle
+    CON = 1    # open circle
+  )) +
+  scale_linetype_manual(values = c(
+    LMH = "solid",
+    CON = "dotted"
+  ))
+
+
+gero.wunifrac.all.ord <- ordinate(gero_rel, "PCoA", "wunifrac")
+
+p<-plot_ordination(
+  physeq     = gero,
+  ordination = gero.wunifrac.all.ord,
+  color      = "Location",
+  shape      = "Treatment"
+) 
+
+p$layers[[1]] <- NULL
+# Now add YOUR custom points + ellipses + themes
+p2_wuni<-p +
+  geom_point(size = 2, stroke = 1) +  # bigger points, no double circles
+  stat_ellipse(aes(group = Treatment, linetype = Treatment)) +
+  theme_biome_utils() +
+  scale_color_manual(values = c(
+    N = "#F37021",
+    C = "#D0DD27",
+    S = "#128D44"
+  )) +
+  scale_shape_manual(values = c(
+    LMH = 16,  # filled circle
+    CON = 1    # open circle
+  )) +
+  scale_linetype_manual(values = c(
+    LMH = "solid",
+    CON = "dotted"
+  ))
+
+
+
+gero.jaccard.pcoa.all.ord <- ordinate(gero_pa, "PCoA", "jaccard")
+p<-plot_ordination(
+  physeq = gero_pa,
+  ordination = gero.jaccard.pcoa.all.ord,
+color="Location",shape="Treatment"
+)
+
+p$layers[[1]] <- NULL
+# Now add YOUR custom points + ellipses + themes
+p3_jac<-p +
+  geom_point(size = 2, stroke = 1) +  # bigger points, no double circles
+  stat_ellipse(aes(group = Treatment, linetype = Treatment)) +
+  theme_biome_utils() +
+  scale_color_manual(values = c(
+    N = "#F37021",
+    C = "#D0DD27",
+    S = "#128D44"
+  )) +
+  scale_shape_manual(values = c(
+    LMH = 16,  # filled circle
+    CON = 1    # open circle
+  )) +
+  scale_linetype_manual(values = c(
+    LMH = "solid",
+    CON = "dotted"
+  ))
+
+
+gero.bray.all.ord<- phyloseq::distance(gero_rel,method = "bray")
+
+# Start with your original ordination plot (with color + shape)
+p <- plot_ordination(
+  physeq     = gero,
+  ordination = gero.bray.pcoa.all.ord,
+  color      = "Location",
+  shape      = "Treatment"
+)
+
+# Remove the first layer (the default geom_point from plot_ordination)
+p$layers[[1]] <- NULL
+
+# Now add YOUR custom points + ellipses + themes
+p4_bray<-p +
+  geom_point(size = 2, stroke = 1) +  # bigger points, no double circles
+  stat_ellipse(aes(group = Treatment, linetype = Treatment)) +
+  theme_biome_utils() +
+  scale_color_manual(values = c(
+    N = "#F37021",
+    C = "#D0DD27",
+    S = "#128D44"
+  )) +
+  scale_shape_manual(values = c(
+    LMH = 16,  # filled circle
+    CON = 1    # open circle
+  )) +
+  scale_linetype_manual(values = c(
+    LMH = "solid",
+    CON = "dotted"
+  ))
+
+
+library(ggar)
+```
+
+```{r}
+library(cowplot)
+
+p1_uni <- p1_uni + theme(legend.position = "none")
+p2_wuni<- p2_wuni + theme(legend.position = "none")
+p3_jac <- p3_jac + theme(legend.position = "none")
+p4_bray<- p4_bray + theme(legend.position = "none")
+
+plot_grid(
+  p4_bray, p3_jac, p1_uni , p2_wuni,
+  labels = c("A", "B", "C", "D"),   # optional panel labels
+  ncol = 3,                         # 2 columns, 2 rows
+  align = "hv"
+)
+
+ggsave("composition.pdf")
+```
+
+
+```{r Adonis}
+library(vegan)
+g.perm <- how(nperm = 999)
+setBlocks(g.perm) <- with(gero_meta, Bout)
+set.seed(2222)
+#adonis2(gero.bray_con~subset(gero_meta, Treatment=="CON")$sum_estimate*subset(gero_meta, Treatment=="CON")$Location)
+adonis2(gero.bray.all~Treatment*Location, data=gero_meta, permutations = g.perm,by= "term")
+adonis2(gero.jaccard.all~Treatment*Location, data=gero_meta, permutations = g.perm,by= "term")
+adonis2(gero.unifrac.all~Treatment+Location+Location*Treatment, data=gero_meta, permutations = g.perm,by= "term")
+adonis2(gero.wunifrac.all~Treatment*Location, data=gero_meta, permutations = g.perm,by= "term")
+```
+
+```{r Site level adonis}
+library(phyloseq)
+library(vegan)
+
+# SOUTH
+gero.s <- subset_samples(gero, Location == "S")
+gero.s <- prune_samples(sample_sums(gero.s) > 0, gero.s)
+gero.s <- prune_taxa(taxa_sums(gero.s) > 0, gero.s)
+meta.s <- as(sample_data(gero.s), "data.frame")
+gero.s_pa<-gero.s
+otu_table(gero.s_pa) <- otu_table(apply(otu_table(gero.s_pa), 1:2, function(x) as.numeric(x > 0)), taxa_are_rows(gero.s_pa))
+
+gero.s_rel <- transform_sample_counts(gero.s, function(x) x / sum(x))
+
+s.perm <- how(nperm = 999)
+setBlocks(s.perm) <- with(meta.s, Bout)
+
+wuni.s <- phyloseq::distance(gero.s_rel, method = "wunifrac")
+uni.s  <- phyloseq::distance(gero.s_pa, method = "unifrac")
+bray.s <- phyloseq::distance(gero.s_rel, method = "bray")
+jac.s  <- phyloseq::distance(gero.s_pa, method = "jaccard")
+
+adonis2(bray.s ~ Treatment, data = meta.s, permutations = 999, by = "term")
+adonis2(jac.s  ~ Treatment, data = meta.s, permutations = 999, by = "term")
+adonis2(uni.s  ~ Treatment, data = meta.s, permutations = 999, by = "term")
+adonis2(wuni.s ~ Treatment, data = meta.s, permutations = 999, by = "term")
+
+
+# CENTRAL
+gero.c <- subset_samples(gero.p, Location == "C")
+gero.c <- prune_samples(sample_sums(gero.c) > 0, gero.c)
+gero.c <- prune_taxa(taxa_sums(gero.c) > 0, gero.c)
+meta.c <- as(sample_data(gero.c), "data.frame")
+
+gero.c_pa<-gero.c
+otu_table(gero.c_pa) <- otu_table(apply(otu_table(gero.c_pa), 1:2, function(x) as.numeric(x > 0)), taxa_are_rows(gero.c_pa))
+
+gero.c_rel <- transform_sample_counts(gero.c, function(x) x / sum(x))
+
+
+wuni.c <- phyloseq::distance(gero.c_rel, method = "wunifrac")
+uni.c  <- phyloseq::distance(gero.c_pa, method = "unifrac")
+bray.c <- phyloseq::distance(gero.c_rel, method = "bray")
+jac.c  <- phyloseq::distance(gero.c_pa, method = "jaccard")
+
+adonis2(bray.c ~ Treatment, data = meta.c, permutations = 999, by = "term")
+adonis2(jac.c  ~ Treatment, data = meta.c, permutations = 999, by = "term")
+adonis2(uni.c  ~ Treatment, data = meta.c, permutations = 999, by = "term")
+adonis2(wuni.c ~ Treatment, data = meta.c, permutations = 999, by = "term")
+
+
+# NORTH
+gero.n <- subset_samples(gero, Location == "N")
+gero.n <- prune_samples(sample_sums(gero.n) > 0, gero.n)
+gero.n <- prune_taxa(taxa_sums(gero.n) > 0, gero.n)
+meta.n <- as(sample_data(gero.n), "data.frame")
+
+gero.n_pa<-gero.n
+otu_table(gero.n_pa) <- otu_table(apply(otu_table(gero.n_pa), 1:2, function(x) as.numeric(x > 0)), taxa_are_rows(gero.n_pa))
+
+gero.n_rel <- transform_sample_counts(gero.n, function(x) x / sum(x))
+
+
+wuni.n <- phyloseq::distance(gero.n_rel, method = "wunifrac")
+uni.n  <- phyloseq::distance(gero.n_pa, method = "unifrac")
+bray.n <- phyloseq::distance(gero.n_rel, method = "bray")
+jac.n  <- phyloseq::distance(gero.n_pa, method = "jaccard")
+
+adonis2(bray.n ~ Treatment, data = meta.n, permutations = 999, by = "term")
+adonis2(jac.n  ~ Treatment, data = meta.n, permutations = 999, by = "term")
+adonis2(uni.n  ~ Treatment, data = meta.n, permutations = 999, by = "term")
+adonis2(wuni.n ~ Treatment, data = meta.n, permutations = 999, by = "term")
+
+```
+
+
+```{r Figure S1 alapha diversity metrics}
+library(lme4)
+
+gero.estimate<-estimate_richness(gero)
+gero_meta <- as.data.frame(gero_meta)
+
+cbind(gero_meta,gero.estimate) %>% ggboxplot(x="Treatment", y="Shannon", fill="Location")+scale_fill_manual(values =c("#F37021","#D0DD27","#128D44"))
+
+cbind(gero_meta,gero.estimate) %>% ggboxplot(x="Treatment", y="Observed", fill="Location")+scale_fill_manual(values =c("#F37021","#D0DD27","#128D44"))
+
+```
+

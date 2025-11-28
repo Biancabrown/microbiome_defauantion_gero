@@ -1,0 +1,31 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r diet analysis}
+
+library(rKIN)
+
+gero_iso<-read.csv("~/Documents/GERO_FINAL/isotope_data.csv")
+
+gero_iso$treat_location <- paste(gero_iso$plot, gero_iso$level, sep = "_")
+
+gero_iso.kinest<-estKIN(
+  data = gero_iso,     # your data object
+  x = "D13C",         # the x-axis variable (13C)
+  y = "D15N",         # the y-axis variable δ15N)
+  group = "treat_location",  # grouping variable (e.g., population, species, treatment)
+  levels = c(70),     # percentile(s) of nearest-neighbour distances to use
+  scaler = 2          # scaling factor (usually 1 or 2 SDs of isotopic niche width)
+)
+
+plotKIN(gero_iso.kinest)
+
+
+area<-gero_iso.kinest$estObj$ShapeArea %>% data.frame()
+group<-gero_iso.kinest$estObj$Group %>% data.frame()
+ag<-cbind(area, group)
+
+```
+
+
