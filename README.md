@@ -10,6 +10,9 @@ This repository contains the R scripts and workflows used to reproduce all analy
 *Experimental defaunation modifies diet and gut microbiome of a wild gerbil, Gerbilliscus robustus*.  
 Scripts are organized to match the analytical components presented in the figures and results.
 
+All required files will be made publicly available on Zenodo:
+https://doi.org/10.5281/zenodo.17743788
+
 ---
 
 
