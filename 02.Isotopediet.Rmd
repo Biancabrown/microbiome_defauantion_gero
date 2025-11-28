@@ -6,7 +6,7 @@ output: html_notebook
 
 library(rKIN)
 
-gero_iso<-read.csv("~/Documents/GERO_FINAL/isotope_data.csv")
+gero_iso<-read.csv("isotope_data.csv")
 
 gero_iso$treat_location <- paste(gero_iso$plot, gero_iso$level, sep = "_")
 
