@@ -4,7 +4,7 @@ output: html_notebook
 ---
 ```{r}
 #rarified gero dataset
-read_rds("gero_rare.rds")
+gero<-read_rds("gero_rare.rds")
 
 #prep data for betadiveristy analysis
 gero_pa<-gero
