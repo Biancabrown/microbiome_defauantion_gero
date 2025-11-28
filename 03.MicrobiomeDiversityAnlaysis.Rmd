@@ -2,6 +2,15 @@
 title: "Alpha and Beta Diversity Analysis"
 output: html_notebook
 ---
+
+############################################################
+## 0. Packages
+############################################################
+
+
+############################################################
+## 1. Load Data and perform betadiversity analysis
+############################################################
 ```{r}
 #rarified gero dataset
 gero<-read_rds("gero_rare.rds")
@@ -18,7 +27,9 @@ gero.jaccard.all.<- phyloseq::distance(gero_pa,method = "jaccard")
 
 ```
 
-
+############################################################
+## 2. Create Figure 3
+############################################################
 
 ```{r Figure 3}
 # Ensure factor levels are ordered 
@@ -146,8 +157,6 @@ p4_bray<-p +
     CON = "dotted"
   ))
 
-
-library(ggar)
 ```
 
 ```{r}
@@ -168,6 +177,9 @@ plot_grid(
 ggsave("composition.pdf")
 ```
 
+############################################################
+## 3. Global PERMANOVA Analysis
+############################################################
 
 ```{r Adonis}
 library(vegan)
@@ -180,6 +192,9 @@ adonis2(gero.jaccard.all~Treatment*Location, data=gero_meta, permutations = g.pe
 adonis2(gero.unifrac.all~Treatment+Location+Location*Treatment, data=gero_meta, permutations = g.perm,by= "term")
 adonis2(gero.wunifrac.all~Treatment*Location, data=gero_meta, permutations = g.perm,by= "term")
 ```
+############################################################
+## 4. Site PERMANOVA Analysis
+############################################################
 
 ```{r Site level adonis}
 library(phyloseq)
@@ -255,7 +270,9 @@ adonis2(uni.n  ~ Treatment, data = meta.n, permutations = 999, by = "term")
 adonis2(wuni.n ~ Treatment, data = meta.n, permutations = 999, by = "term")
 
 ```
-
+############################################################
+## 4. Diveristy Analysis
+############################################################
 
 ```{r Figure S1 alapha diversity metrics}
 library(lme4)
