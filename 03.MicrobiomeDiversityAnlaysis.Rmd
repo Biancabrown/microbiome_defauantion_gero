@@ -6,8 +6,13 @@ output: html_notebook
 ############################################################
 ## 0. Packages
 ############################################################
-
-Library(phyloseq microbiome, mia, ggplot2, dplyr, vegan)
+## ---- Packages ----
+library(phyloseq)
+library(microbiome)
+library(vegan)
+library(ggpubr)
+library(dplyr)
+library(ggplot2)
 ############################################################
 ## 1. Load Data and perform betadiversity analysis
 ############################################################
