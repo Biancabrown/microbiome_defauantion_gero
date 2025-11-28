@@ -3,6 +3,9 @@ title: "ANCOM-BC"
 output: html_notebook
 ---
 
+############################################################
+## 1. Load packages
+############################################################
 ```{r Figure 4}
 ## ============================================================
 ## ANCOM-BC on Gero by Location (N, C, S) and Lollipop Plot
@@ -17,7 +20,10 @@ library(ggpubr)
 library(dplyr)
 library(ggplot2)
 
-## ps0 is assumed to be a phyloseq object already in the environment
+
+############################################################
+## 2. Read Object, Data Set up and Run ANCOMBC
+############################################################
 
 gero_unrare <- read_rds("gero_unrare.rds")
 ## ---- Subset Gero and split by location ----
@@ -96,6 +102,11 @@ out.pseq.gero.south.true <- merge(
   by = "taxon"
 )
 
+
+############################################################
+## 3. Make taxonomy Tables
+############################################################
+
 ## ---- Melt abundance data for plotting ----
 gero.melt.unrare <- psmelt(gero_unrare)
 
@@ -123,10 +134,9 @@ gero.melt.s. <- gero.melt.s %>%
   select(OTU, Phylum, Class, Order, Family, Genus, Species, Location) %>%
   distinct()
 
-## ============================================================
-## Lollipop plot for significant OTUs across locations
-## (uses TreatmentCON.y from merged ANCOM-BC lfc table)
-## ============================================================
+############################################################
+## 5. Make Plots
+############################################################
 
 ## Merge taxonomy with ANCOM-BC results and keep unique OTUs
 merged_data <- dplyr::bind_rows(
@@ -168,7 +178,7 @@ ggplot(merged_data, aes(x = reorder(label, TreatmentCON.y),
     legend.text  = element_text(size = 8)
   ) +
   scale_color_manual(values = c("#F37021", "#D0DD27", "#128D44"))
-# ggsave("all.lollipop.unique.otus.pdf", width = 10, height = 6)
+
 
 
 
