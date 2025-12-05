@@ -54,7 +54,7 @@ mycols <- c(
 ## 3. Early vs Late subsets + combined data frame
 ############################################################
 
-# Helper function to collapse non-Acacia into "Other"
+# collapse non-Acacia into "Other"
 collapse_species <- function(df) {
   df %>%
     filter(treatment %in% c("TOTAL", "OPEN"),
